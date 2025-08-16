@@ -83,20 +83,6 @@ export default function MapView({ basemap, onMapReady }: Props) {
 
   return (
     <div className="h-[calc(100vh-64px)] relative">
-      {/* <MapContainer
-        center={[9.082, 8.6753]}
-        zoom={6}
-        className="h-full w-full"
-        whenCreated={(map) => {
-          mapRef.current = map;
-          map.editTools = new L.Editable(map); // enable editable
-          onMapReady?.(map);
-        }}
-      >
-        <TileLayer {...BASEMAPS[basemap]} />
-        <ScaleControl position="bottomleft" />
-        <EditableHandler />
-      </MapContainer> */}
       <MapContainer
         center={[9.082, 8.6753]}
         zoom={6}
