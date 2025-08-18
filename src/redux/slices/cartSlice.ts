@@ -23,8 +23,15 @@ const cartSlice = createSlice({
     clearCart: (state) => {
       state.regions = [];
     },
+    updateRegion: (state, action: PayloadAction<Region>) => {
+      const idx = state.regions.findIndex((r) => r.id === action.payload.id);
+      if (idx !== -1) {
+        state.regions[idx] = action.payload; // overwrite with new geojson
+      }
+    },
   },
 });
 
-export const { addRegion, removeRegion, clearCart } = cartSlice.actions;
+export const { addRegion, removeRegion, clearCart, updateRegion } =
+  cartSlice.actions;
 export default cartSlice.reducer;
