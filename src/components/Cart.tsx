@@ -18,13 +18,13 @@ export default function Cart() {
       <div className="px-4 py-3 border-b flex items-center justify-between">
         <div className="font-semibold">Cart</div>
         <button
-          className="text-sm text-red-500 hover:no-underline border border-red-500 rounded-lg px-4 cursor-pointer hover:text-white hover:bg-red-500 transition-colors duration-500 ease-in-out"
+          className="text-sm text-red-600 hover:no-underline border border-red-600 rounded-lg px-3 py-2 font-semibold cursor-pointer hover:text-white hover:bg-red-600 transition-colors duration-500 ease-in-out"
           onClick={() => {
             dispatch(clearCart());
             toast("Cart cleared.", { icon: "🧹" });
           }}
         >
-          Clear
+          Clear Cart
         </button>
       </div>
 
