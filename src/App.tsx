@@ -19,7 +19,7 @@ export default function App() {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const { latitude, longitude } = pos.coords;
-        map.flyTo([latitude, longitude], 14);
+        map.flyTo([latitude, longitude], 18);
         // marker
         const marker = window.L.marker([latitude, longitude]).bindPopup(
           "You are here"
@@ -61,7 +61,7 @@ export default function App() {
             {/* My Location button (in header) */}
             <button
               onClick={locateMe}
-              className="ml-2 bg-blue-600 text-white text-sm rounded-md px-3 py-1.5 hover:bg-blue-700"
+              className="ml-2 bg-blue-600 text-white text-sm rounded-md px-2 py-1.5 hover:bg-blue-700 cursor-pointer"
             >
               📍 My Location
             </button>

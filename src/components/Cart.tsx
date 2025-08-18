@@ -17,7 +17,7 @@ export default function Cart() {
       <div className="px-4 py-3 border-b flex items-center justify-between">
         <div className="font-semibold">Cart</div>
         <button
-          className="text-sm text-red-600 hover:underline"
+          className="text-sm text-red-600 hover:no-underline border border-red-600 rounded-lg px-4 cursor-pointer"
           onClick={() => {
             dispatch(clearCart());
             toast("Cart cleared.", { icon: "🧹" });

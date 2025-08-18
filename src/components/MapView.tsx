@@ -122,11 +122,6 @@ export default function MapView({ basemap, onMapReady }: Props) {
   );
 }
 
-
-
-
-
-
 // import { useEffect, useRef } from "react";
 // import { MapContainer, TileLayer, ScaleControl, useMap } from "react-leaflet";
 // import L from "leaflet";
