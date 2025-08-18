@@ -78,9 +78,6 @@ export default function App() {
                 const leaflet = (await import("leaflet")).default;
                 window.L = leaflet;
               }
-              // window.L =
-              //   ((m as any) && (window as any).L) ||
-              //   (await import("leaflet")).default;
             }}
           />
         </div>

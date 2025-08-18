@@ -1,6 +1,7 @@
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { clearCart, removeRegion } from "../redux/slices/cartSlice";
 import toast from "react-hot-toast";
+import { FaRegTrashAlt } from "react-icons/fa";
 
 export default function Cart() {
   const regions = useAppSelector((s) => s.cart.regions);
@@ -17,7 +18,7 @@ export default function Cart() {
       <div className="px-4 py-3 border-b flex items-center justify-between">
         <div className="font-semibold">Cart</div>
         <button
-          className="text-sm text-red-600 hover:no-underline border border-red-600 rounded-lg px-4 cursor-pointer"
+          className="text-sm text-red-500 hover:no-underline border border-red-500 rounded-lg px-4 cursor-pointer hover:text-white hover:bg-red-500 transition-colors duration-500 ease-in-out"
           onClick={() => {
             dispatch(clearCart());
             toast("Cart cleared.", { icon: "🧹" });
@@ -38,10 +39,10 @@ export default function Cart() {
               <div className="flex justify-between items-center">
                 <div className="font-medium">{r.name}</div>
                 <button
-                  className="text-red-600 text-sm hover:underline"
+                  className="text-red-600 text-sm hover:no-underline cursor-pointer"
                   onClick={() => handleRemove(r.id)}
                 >
-                  Remove
+                  <FaRegTrashAlt />
                 </button>
               </div>
               <div className="text-xs text-gray-500 mt-1">
