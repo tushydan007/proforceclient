@@ -1,12 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, ScaleControl, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import "leaflet-editable"; // patches Leaflet
+import "leaflet-editable";
 
 import type { BasemapKey, Region } from "../types";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { addRegion, updateRegion } from "../redux/slices/cartSlice";
+import { addRegion, removeRegion } from "../redux/slices/cartSlice";
 import toast from "react-hot-toast";
 
 // Basemaps
@@ -29,94 +29,130 @@ const BASEMAPS: Record<BasemapKey, { url: string; attribution: string }> = {
   },
 };
 
+// Highlight and default styles
+const defaultStyle = {
+  color: "blue",
+  weight: 2,
+  fillOpacity: 0.2,
+};
+
+const highlightStyle = {
+  color: "orange",
+  weight: 3,
+  fillOpacity: 0.4,
+};
+
 type Props = {
   basemap: BasemapKey;
   onMapReady?: (map: L.Map) => void;
 };
 
-/**
- * Handles "editable:created" and update events from Leaflet.Editable
- */
-function EditableHandler() {
-  const dispatch = useAppDispatch();
-  const cartCount = useAppSelector((s) => s.cart.regions.length);
+function EditableHandler({
+  onRegionDrawn,
+}: {
+  onRegionDrawn: (r: Region, layer: L.Layer) => void;
+}) {
   const map = useMap();
 
   useEffect(() => {
     if (!map) return;
 
-    // When a region is first created
     const handleCreated = (e: any) => {
-      try {
-        const layer = e.layer as L.Layer & {
-          toGeoJSON?: () => GeoJSON.Feature;
-        };
-        if (!layer.toGeoJSON) return;
+      const layer = e.layer as L.Layer & {
+        toGeoJSON?: () => GeoJSON.Feature;
+        setStyle?: (s: any) => void;
+      };
+      if (!layer.toGeoJSON) return;
 
-        const gj = layer.toGeoJSON();
-        const id = crypto.randomUUID();
-
-        const region: Region = {
-          id,
-          name: `Region ${new Date().toLocaleTimeString()}`,
-          geojson: gj,
-        };
-
-        // attach regionId to the layer for tracking edits
-        (layer as any).options.regionId = id;
-
-        dispatch(addRegion(region));
-        toast.success(`${region.name} added. Cart: ${cartCount + 1}`, {
-          duration: 2500,
-        });
-      } catch (err) {
-        console.error("Error handling created region:", err);
+      // Apply default style
+      if (layer.setStyle) {
+        layer.setStyle(defaultStyle);
       }
-    };
 
-    // When a region is edited (drag, resize, move vertex)
-    const handleEdited = (e: any) => {
-      try {
-        const layer = e.layer as L.Layer & {
-          toGeoJSON?: () => GeoJSON.Feature;
-        };
-        if (!layer?.toGeoJSON) return;
+      const gj = layer.toGeoJSON();
+      const id = crypto.randomUUID();
 
-        const regionId = (layer as any).options.regionId;
-        if (!regionId) return;
+      const region: Region = {
+        id,
+        name: `Region ${new Date().toLocaleTimeString()}`,
+        geojson: gj,
+      };
 
-        const updatedGeo = layer.toGeoJSON();
-        const updated: Region = {
-          id: regionId,
-          name: `Region ${new Date().toLocaleTimeString()}`, // could preserve old name
-          geojson: updatedGeo,
-        };
-
-        dispatch(updateRegion(updated));
-        toast.success("Region updated in cart", { duration: 1500 });
-      } catch (err) {
-        console.error("Error updating region:", err);
-      }
+      // pass up
+      onRegionDrawn(region, layer);
     };
 
     map.on("editable:created", handleCreated);
-    map.on("editable:editing", handleEdited);
-    map.on("editable:dragend", handleEdited);
-    map.on("editable:vertex:dragend", handleEdited);
-
     return () => {
       map.off("editable:created", handleCreated);
-      map.off("editable:editing", handleEdited);
-      map.off("editable:dragend", handleEdited);
-      map.off("editable:vertex:dragend", handleEdited);
     };
-  }, [map, dispatch, cartCount]);
+  }, [map, onRegionDrawn]);
 
   return null;
 }
 
 export default function MapView({ basemap, onMapReady }: Props) {
   const mapRef = useRef<L.Map | null>(null);
+  const dispatch = useAppDispatch();
+  const cartRegions = useAppSelector((s) => s.cart.regions);
+
+  const [selectedRegion, setSelectedRegion] = useState<Region | null>(null);
+  const [regionName, setRegionName] = useState("");
+  const [regionLayer, setRegionLayer] = useState<
+    (L.Layer & { setStyle?: (s: any) => void }) | null
+  >(null);
+
+  const handleAddToCart = () => {
+    if (selectedRegion) {
+      const regionToAdd: Region = {
+        ...selectedRegion,
+        name: regionName.trim() || selectedRegion.name,
+      };
+
+      dispatch(addRegion(regionToAdd));
+      toast.success(`${regionToAdd.name} added to cart`);
+      cleanupSelection();
+    }
+  };
+
+  const handleRemoveFromCart = () => {
+    if (selectedRegion) {
+      dispatch(removeRegion(selectedRegion.id));
+      toast.success(`${selectedRegion.name} removed from cart`);
+      cleanupSelection();
+    }
+  };
+
+  const handleCancel = () => {
+    cleanupSelection();
+  };
+
+  const cleanupSelection = () => {
+    if (regionLayer?.setStyle) {
+      regionLayer.setStyle(defaultStyle); // reset style
+    }
+    setSelectedRegion(null);
+    setRegionName("");
+    setRegionLayer(null);
+  };
+
+  const attachClickHandler = (region: Region, layer: L.Layer) => {
+    layer.on("click", () => {
+      // reset previously selected region’s style
+      if (regionLayer?.setStyle) {
+        regionLayer.setStyle(defaultStyle);
+      }
+
+      // highlight this layer
+      if ((layer as any).setStyle) {
+        (layer as any).setStyle(highlightStyle);
+      }
+
+      setSelectedRegion(region);
+      setRegionName(region.name);
+      setRegionLayer(layer as any);
+    });
+  };
 
   return (
     <div className="h-[calc(100vh-64px)] relative">
@@ -133,10 +169,19 @@ export default function MapView({ basemap, onMapReady }: Props) {
       >
         <TileLayer {...BASEMAPS[basemap]} />
         <ScaleControl position="bottomleft" />
-        <EditableHandler />
+        <EditableHandler
+          onRegionDrawn={(region, layer) => {
+            attachClickHandler(region, layer);
+            // auto-select new region
+            (layer as any).setStyle(highlightStyle);
+            setSelectedRegion(region);
+            setRegionName(region.name);
+            setRegionLayer(layer as any);
+          }}
+        />
       </MapContainer>
 
-      {/* Floating buttons for drawing */}
+      {/* Draw buttons */}
       <div className="absolute top-2 right-4 bg-white p-2 rounded shadow space-x-2 z-[1000]">
         <button
           onClick={() =>
@@ -155,252 +200,46 @@ export default function MapView({ basemap, onMapReady }: Props) {
           Rectangle
         </button>
       </div>
+
+      {/* Popup control */}
+      {selectedRegion && (
+        <div className="absolute bottom-4 right-4 bg-white p-3 rounded shadow-lg w-64 z-[1000]">
+          <label className="block text-sm font-medium mb-1">Region Name</label>
+          <input
+            type="text"
+            value={regionName}
+            onChange={(e) => setRegionName(e.target.value)}
+            className="w-full border rounded px-2 py-1 mb-3"
+          />
+
+          <div className="flex space-x-2">
+            {cartRegions.some((r) => r.id === selectedRegion.id) ? (
+              <button
+                onClick={handleRemoveFromCart}
+                className="flex-1 px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              >
+                Remove
+              </button>
+            ) : (
+              <button
+                onClick={handleAddToCart}
+                className="flex-1 px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+              >
+                Add
+              </button>
+            )}
+            <button
+              onClick={handleCancel}
+              className="flex-1 px-3 py-2 bg-gray-300 text-black rounded hover:bg-gray-400"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-// import { useEffect, useRef, useState } from "react";
-// import { MapContainer, TileLayer, ScaleControl, useMap } from "react-leaflet";
-// import L from "leaflet";
-// import "leaflet/dist/leaflet.css";
-// import "leaflet-editable";
-
-// import type { BasemapKey, Region } from "../types";
-// import { useAppDispatch, useAppSelector } from "../hooks";
-// import { addRegion, removeRegion } from "../redux/slices/cartSlice";
-// import toast from "react-hot-toast";
-
-// // Basemaps
-// const BASEMAPS: Record<BasemapKey, { url: string; attribution: string }> = {
-//   osm: {
-//     url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-//     attribution: "&copy; OpenStreetMap contributors",
-//   },
-//   esriImagery: {
-//     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-//     attribution: "Tiles &copy; Esri",
-//   },
-//   esriStreets: {
-//     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
-//     attribution: "Tiles &copy; Esri",
-//   },
-//   esriTopo: {
-//     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
-//     attribution: "Tiles &copy; Esri",
-//   },
-// };
-
-// // Highlight and default styles
-// const defaultStyle = {
-//   color: "blue",
-//   weight: 2,
-//   fillOpacity: 0.2,
-// };
-
-// const highlightStyle = {
-//   color: "orange",
-//   weight: 3,
-//   fillOpacity: 0.4,
-// };
-
-// type Props = {
-//   basemap: BasemapKey;
-//   onMapReady?: (map: L.Map) => void;
-// };
-
-// function EditableHandler({
-//   onRegionDrawn,
-// }: {
-//   onRegionDrawn: (r: Region, layer: L.Layer) => void;
-// }) {
-//   const map = useMap();
-
-//   useEffect(() => {
-//     if (!map) return;
-
-//     const handleCreated = (e: any) => {
-//       const layer = e.layer as L.Layer & {
-//         toGeoJSON?: () => GeoJSON.Feature;
-//         setStyle?: (s: any) => void;
-//       };
-//       if (!layer.toGeoJSON) return;
-
-//       // Apply default style
-//       if (layer.setStyle) {
-//         layer.setStyle(defaultStyle);
-//       }
-
-//       const gj = layer.toGeoJSON();
-//       const id = crypto.randomUUID();
-
-//       const region: Region = {
-//         id,
-//         name: `Region ${new Date().toLocaleTimeString()}`,
-//         geojson: gj,
-//       };
-
-//       // pass up
-//       onRegionDrawn(region, layer);
-//     };
-
-//     map.on("editable:created", handleCreated);
-//     return () => {
-//       map.off("editable:created", handleCreated);
-//     };
-//   }, [map, onRegionDrawn]);
-
-//   return null;
-// }
-
-// export default function MapView({ basemap, onMapReady }: Props) {
-//   const mapRef = useRef<L.Map | null>(null);
-//   const dispatch = useAppDispatch();
-//   const cartRegions = useAppSelector((s) => s.cart.regions);
-
-//   const [selectedRegion, setSelectedRegion] = useState<Region | null>(null);
-//   const [regionName, setRegionName] = useState("");
-//   const [regionLayer, setRegionLayer] = useState<
-//     (L.Layer & { setStyle?: (s: any) => void }) | null
-//   >(null);
-
-//   const handleAddToCart = () => {
-//     if (selectedRegion) {
-//       const regionToAdd: Region = {
-//         ...selectedRegion,
-//         name: regionName.trim() || selectedRegion.name,
-//       };
-
-//       dispatch(addRegion(regionToAdd));
-//       toast.success(`${regionToAdd.name} added to cart`);
-//       cleanupSelection();
-//     }
-//   };
-
-//   const handleRemoveFromCart = () => {
-//     if (selectedRegion) {
-//       dispatch(removeRegion(selectedRegion.id));
-//       toast.success(`${selectedRegion.name} removed from cart`);
-//       cleanupSelection();
-//     }
-//   };
-
-//   const handleCancel = () => {
-//     cleanupSelection();
-//   };
-
-//   const cleanupSelection = () => {
-//     if (regionLayer?.setStyle) {
-//       regionLayer.setStyle(defaultStyle); // reset style
-//     }
-//     setSelectedRegion(null);
-//     setRegionName("");
-//     setRegionLayer(null);
-//   };
-
-//   const attachClickHandler = (region: Region, layer: L.Layer) => {
-//     layer.on("click", () => {
-//       // reset previously selected region’s style
-//       if (regionLayer?.setStyle) {
-//         regionLayer.setStyle(defaultStyle);
-//       }
-
-//       // highlight this layer
-//       if ((layer as any).setStyle) {
-//         (layer as any).setStyle(highlightStyle);
-//       }
-
-//       setSelectedRegion(region);
-//       setRegionName(region.name);
-//       setRegionLayer(layer as any);
-//     });
-//   };
-
-//   return (
-//     <div className="h-[calc(100vh-64px)] relative">
-//       <MapContainer
-//         center={[9.082, 8.6753]}
-//         zoom={6}
-//         className="h-full w-full"
-//         ref={(map) => {
-//           if (!map) return;
-//           mapRef.current = map;
-//           map.editTools = new L.Editable(map);
-//           onMapReady?.(map);
-//         }}
-//       >
-//         <TileLayer {...BASEMAPS[basemap]} />
-//         <ScaleControl position="bottomleft" />
-//         <EditableHandler
-//           onRegionDrawn={(region, layer) => {
-//             attachClickHandler(region, layer);
-//             // auto-select new region
-//             (layer as any).setStyle(highlightStyle);
-//             setSelectedRegion(region);
-//             setRegionName(region.name);
-//             setRegionLayer(layer as any);
-//           }}
-//         />
-//       </MapContainer>
-
-//       {/* Draw buttons */}
-//       <div className="absolute top-2 right-4 bg-white p-2 rounded shadow space-x-2 z-[1000]">
-//         <button
-//           onClick={() =>
-//             mapRef.current && (mapRef.current as any).editTools.startPolygon()
-//           }
-//           className="px-2 py-1 bg-blue-500 text-white rounded"
-//         >
-//           Polygon
-//         </button>
-//         <button
-//           onClick={() =>
-//             mapRef.current && (mapRef.current as any).editTools.startRectangle()
-//           }
-//           className="px-2 py-1 bg-green-500 text-white rounded"
-//         >
-//           Rectangle
-//         </button>
-//       </div>
-
-//       {/* Popup control */}
-//       {selectedRegion && (
-//         <div className="absolute bottom-4 right-4 bg-white p-3 rounded shadow-lg w-64 z-[1000]">
-//           <label className="block text-sm font-medium mb-1">Region Name</label>
-//           <input
-//             type="text"
-//             value={regionName}
-//             onChange={(e) => setRegionName(e.target.value)}
-//             className="w-full border rounded px-2 py-1 mb-3"
-//           />
-
-//           <div className="flex space-x-2">
-//             {cartRegions.some((r) => r.id === selectedRegion.id) ? (
-//               <button
-//                 onClick={handleRemoveFromCart}
-//                 className="flex-1 px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-//               >
-//                 Remove
-//               </button>
-//             ) : (
-//               <button
-//                 onClick={handleAddToCart}
-//                 className="flex-1 px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
-//               >
-//                 Add
-//               </button>
-//             )}
-//             <button
-//               onClick={handleCancel}
-//               className="flex-1 px-3 py-2 bg-gray-300 text-black rounded hover:bg-gray-400"
-//             >
-//               Cancel
-//             </button>
-//           </div>
-//         </div>
-//       )}
-//     </div>
-//   );
-// }
 
 // Functionality to cancel if the user does not want to add item to cart
 // import { useEffect, useRef, useState } from "react";
