@@ -222,6 +222,14 @@ export default function MapView({ basemap, onMapReady }: Props) {
       geojson: freshGj,
       center: computeCenter(freshGj),
     };
+    // Log region attributes for debugging
+    console.log("Selected Region Attributes:", {
+      id: region.id,
+      name: region.name,
+      geojson: region.geojson,
+      center: region.center,
+    });
+
     dispatch(addRegion(region));
     toast.success(`${region.name} added to cart`);
 
