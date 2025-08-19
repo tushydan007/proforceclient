@@ -4,4 +4,5 @@ export interface Region {
   id: string;
   name: string;
   geojson: GeoJSON.Feature; // polygon/rectangle as GeoJSON
+  center: [number, number];
 }
